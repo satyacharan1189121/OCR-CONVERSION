@@ -1,0 +1,571 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Powered Handwritten Text Extractor</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Inter', sans-serif; background-color: #e6f7f3; } /* Light Teal Background */
+        .card { background-color: white; border-radius: 1rem; box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05); }
+        .drop-area { border: 2px dashed #475569; transition: all 0.2s; }
+        .drop-area.highlight { border-color: #10b981; background-color: #f0fff4; } /* Teal highlight */
+        .loader {
+            border-top-color: #10b981; /* Teal loader */
+            -webkit-animation: spin 1.5s linear infinite;
+            animation: spin 1.5s linear infinite;
+        }
+        @-webkit-keyframes spin {
+            0% { -webkit-transform: rotate(0deg); }
+            100% { -webkit-transform: rotate(360deg); }
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        .tab-button {
+            padding: 0.75rem 1.5rem;
+            font-weight: 600;
+            border-radius: 0.75rem;
+            transition: background-color 0.2s, color 0.2s;
+            border: 1px solid transparent;
+        }
+        .tab-button.active {
+            background-color: #10b981; /* Active Teal */
+            color: white;
+            box-shadow: 0 4px 6px -1px rgba(16, 185, 129, 0.5);
+        }
+        .tab-button:not(.active):hover {
+            background-color: #ccfbf1;
+        }
+        #handwritingCanvas {
+            border: 2px solid #065f46; /* Darker border for drawing area */
+            touch-action: none;
+        }
+    </style>
+</head>
+<body class="p-4 sm:p-8">
+
+    <div class="max-w-5xl mx-auto space-y-8">
+        <header class="text-center">
+            <h1 class="text-4xl font-extrabold text-gray-800">AI Powered Handwritten Text Extractor</h1>
+            <p class="text-gray-600 mt-2">Accurately extract and digitize handwritten paragraphs and notes.</p>
+            <p class="text-xs text-gray-500 mt-1">Project by Satya Charan, Avinash, A Sruti Vidya | Guide: Lakshmi Prasanna Ma’am</p>
+        </header>
+
+        <div class="flex justify-center card p-3 space-x-2 sm:space-x-4 mb-6">
+            <button id="tab-handwriting" onclick="switchMode('handwriting')" class="tab-button active">Handwriting Pad</button>
+            <button id="tab-upload" onclick="switchMode('upload')" class="tab-button text-gray-700 hover:bg-gray-100">Upload Image</button>
+            <button id="tab-camera" onclick="switchMode('camera')" class="tab-button text-gray-700 hover:bg-gray-100">Live Camera</button>
+        </div>
+
+        <div class="grid lg:grid-cols-2 gap-6">
+
+            <div class="card p-6 space-y-4">
+                <h2 id="input-title" class="text-xl font-semibold text-gray-700 border-b pb-2">1. Write Text on Pad</h2>
+
+                <div id="mode-handwriting" class="flex flex-col items-center">
+                    <p class="text-sm text-gray-600 mb-2">Write a sentence or paragraph below (use a stylus, mouse, or touch):</p>
+                    <canvas id="handwritingCanvas" class="bg-white rounded-lg" width="450" height="300"></canvas>
+                    <div class="flex space-x-4 mt-4 w-full">
+                        <button id="clearCanvasButton" onclick="clearCanvas()" class="flex-1 py-2 bg-red-500 text-white font-medium rounded-lg hover:bg-red-600 transition duration-150 shadow-md">
+                            Clear Pad
+                        </button>
+                        <button id="captureCanvasButton" onclick="captureHandwriting()" class="hidden py-2 bg-yellow-500 text-white font-medium rounded-lg hover:bg-yellow-600 transition duration-150 shadow-md">
+                            Capture Image
+                        </button>
+                    </div>
+                    <p id="canvasStatus" class="text-sm text-gray-500 mt-2 hidden">Canvas image ready for recognition.</p>
+                </div>
+                
+                <div id="mode-upload" class="hidden">
+                    <div id="drop-area" class="drop-area p-8 text-center cursor-pointer rounded-lg hover:border-teal-400">
+                        <input type="file" id="fileInput" accept="image/*" class="hidden" onchange="handleFileChange(event)">
+                        <p class="text-gray-600">Drag & Drop Image Here</p>
+                        <p class="text-sm text-gray-400">or</p>
+                        <button onclick="document.getElementById('fileInput').click()" class="mt-2 px-4 py-2 bg-blue-500 text-white font-medium rounded-lg hover:bg-blue-600 transition duration-150 shadow-md">
+                            Browse Files
+                        </button>
+                        <p class="text-xs text-gray-400 mt-2">(Any image containing handwritten or printed text)</p>
+                    </div>
+
+                    <div id="imagePreviewContainer" class="hidden mt-4">
+                        <h3 class="text-lg font-medium text-gray-700 mb-2">Image Preview:</h3>
+                        <img id="imagePreview" src="#" alt="Image Preview" class="w-full h-auto max-h-96 object-contain rounded-lg border border-gray-200">
+                    </div>
+                </div>
+
+
+                <div id="mode-camera" class="hidden flex flex-col items-center">
+                    <p id="cameraStatus" class="text-sm text-gray-600 mb-2">Aim at the handwritten or printed text you want to extract.</p>
+                    <video id="videoElement" class="w-full h-auto max-h-96 object-cover rounded-lg border border-gray-200 bg-gray-900" autoplay playsinline></video>
+                    <canvas id="cameraCanvas" class="hidden"></canvas>
+                    <button id="snapshotButton" onclick="takeSnapshot()" class="mt-4 w-full py-2 bg-purple-500 text-white font-medium rounded-lg hover:bg-purple-600 transition duration-150 shadow-md disabled:opacity-50" disabled>
+                        Take Snapshot
+                    </button>
+                    <p id="snapshotStatus" class="text-sm text-gray-500 mt-2 hidden">Snapshot taken, ready for extraction.</p>
+                </div>
+
+                <button id="ocrButton" onclick="runOCR()" class="w-full py-3 bg-green-500 text-white font-bold text-lg rounded-lg hover:bg-green-600 transition duration-150 shadow-lg disabled:opacity-50" disabled>
+                    Extract Text
+                </button>
+            </div>
+
+            <div class="card p-6 space-y-4">
+                <h2 class="text-xl font-semibold text-gray-700 border-b pb-2">2. Extracted Text Result</h2>
+
+                <div id="loading" class="hidden flex justify-center items-center h-40">
+                    <div class="loader ease-linear rounded-full border-4 border-t-4 border-gray-200 h-12 w-12"></div>
+                    <p class="ml-4 text-gray-600">Analyzing image and extracting text...</p>
+                </div>
+
+                <div id="resultsContainer" class="min-h-40 bg-gray-50 p-4 border border-gray-200 rounded-lg">
+                    <p id="resultsPlaceholder" class="text-gray-400 italic">Extracted text will appear here after analysis.</p>
+                    <pre id="results" class="text-gray-800 text-sm overflow-auto text-left"></pre>
+                </div>
+
+                <button id="copyButton" onclick="copyText()" class="w-full py-2 bg-indigo-500 text-white font-medium rounded-lg hover:bg-indigo-600 transition duration-150 shadow-md disabled:opacity-50" disabled>
+                    <span id="copyButtonText">Copy Text</span>
+                </button>
+                <div id="errorDisplay" class="text-red-600 text-sm p-2 bg-red-50 rounded-lg hidden"></div>
+            </div>
+        </div>
+    </div>
+
+    <script type="module">
+        // Global state
+        let imageBase64 = null;
+        let fileMimeType = null;
+        let currentMode = 'handwriting'; 
+        let videoStream = null; 
+        
+        // --- MODIFIED FOR FLASK BACKEND ---
+        const API_URL = '/run-ocr'; // Point to your local Flask endpoint
+
+        // UI Element References
+        const elements = {
+            // Shared elements
+            fileInput: document.getElementById('fileInput'),
+            imagePreview: document.getElementById('imagePreview'),
+            imagePreviewContainer: document.getElementById('imagePreviewContainer'),
+            ocrButton: document.getElementById('ocrButton'),
+            resultsPlaceholder: document.getElementById('resultsPlaceholder'),
+            loading: document.getElementById('loading'),
+            dropArea: document.getElementById('drop-area'),
+            copyButton: document.getElementById('copyButton'),
+            copyButtonText: document.getElementById('copyButtonText'),
+            errorDisplay: document.getElementById('errorDisplay'),
+            inputTitle: document.getElementById('input-title'),
+            results: document.getElementById('results'),
+
+            // Mode containers
+            modeUpload: document.getElementById('mode-upload'),
+            modeHandwriting: document.getElementById('mode-handwriting'),
+            modeCamera: document.getElementById('mode-camera'),
+
+            // Handwriting mode elements
+            handwritingCanvas: document.getElementById('handwritingCanvas'),
+            canvasStatus: document.getElementById('canvasStatus'),
+
+            // Camera mode elements
+            videoElement: document.getElementById('videoElement'),
+            cameraCanvas: document.getElementById('cameraCanvas'),
+            snapshotButton: document.getElementById('snapshotButton'),
+            cameraStatus: document.getElementById('cameraStatus'),
+            snapshotStatus: document.getElementById('snapshotStatus'),
+        };
+
+        // Handwriting Canvas Context
+        let ctx = elements.handwritingCanvas.getContext('2d');
+        let isDrawing = false;
+        
+        // --- Core Mode Switching Logic ---
+
+        function updateTabs(mode) {
+            document.querySelectorAll('.tab-button').forEach(btn => {
+                btn.classList.remove('active', 'bg-green-500', 'text-white');
+                btn.classList.add('text-gray-700', 'hover:bg-gray-100');
+            });
+            const targetButton = document.getElementById(`tab-${mode}`);
+            if (targetButton) {
+                targetButton.classList.add('active', 'bg-green-500', 'text-white');
+                targetButton.classList.remove('text-gray-700', 'hover:bg-gray-100');
+            }
+        }
+
+        function hideAllModes() {
+            elements.modeUpload.classList.add('hidden');
+            elements.modeHandwriting.classList.add('hidden');
+            elements.modeCamera.classList.add('hidden');
+            elements.imagePreviewContainer.classList.add('hidden');
+        }
+
+        window.switchMode = (mode) => {
+            currentMode = mode;
+            updateTabs(mode);
+            hideAllModes();
+            clearGlobalState();
+            
+            elements.ocrButton.disabled = true;
+
+            if (videoStream) {
+                videoStream.getTracks().forEach(track => track.stop());
+                videoStream = null;
+            }
+
+            if (mode === 'upload') {
+                elements.inputTitle.textContent = "1. Upload Image (Full Text)";
+                elements.modeUpload.classList.remove('hidden');
+                // The global state is cleared, so ocrButton will be disabled until a file is loaded
+                
+            } else if (mode === 'handwriting') {
+                elements.inputTitle.textContent = "1. Write Text on Pad";
+                elements.modeHandwriting.classList.remove('hidden');
+                elements.modeHandwriting.classList.add('flex');
+                setupCanvas(450, 300, 4); 
+                clearCanvas();
+                // Enable OCR button immediately for handwriting mode, as canvas is always an input
+                elements.ocrButton.disabled = false;
+                
+            } else if (mode === 'camera') {
+                elements.inputTitle.textContent = "1. Live Camera Input (Full Text)";
+                elements.modeCamera.classList.remove('hidden');
+                elements.modeCamera.classList.add('flex');
+                setupCamera();
+            }
+        };
+
+        // --- Camera Mode Logic (Mode 3) ---
+
+        window.setupCamera = async () => {
+            elements.cameraStatus.textContent = "Requesting camera access...";
+            elements.snapshotButton.disabled = true;
+            elements.snapshotStatus.classList.add('hidden');
+            
+            try {
+                videoStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } });
+                elements.videoElement.srcObject = videoStream;
+                
+                elements.videoElement.onloadedmetadata = () => {
+                    elements.videoElement.play();
+                    elements.cameraStatus.textContent = "Camera Ready. Aim and capture the text.";
+                    elements.snapshotButton.disabled = false;
+                };
+
+            } catch (err) {
+                showError("Could not access camera. Please check permissions or use another mode.");
+                elements.cameraStatus.textContent = "Camera access denied or device not found.";
+                elements.snapshotButton.disabled = true;
+                elements.ocrButton.disabled = true;
+                console.error("Camera Error:", err);
+            }
+        };
+
+        window.takeSnapshot = () => {
+            if (!videoStream) return;
+            
+            const video = elements.videoElement;
+            const canvas = elements.cameraCanvas;
+            const context = canvas.getContext('2d');
+            
+            canvas.width = video.videoWidth;
+            canvas.height = video.videoHeight;
+            
+            context.drawImage(video, 0, 0, canvas.width, canvas.height);
+            
+            // Use a higher quality JPEG for better OCR results from photos
+            imageBase64 = canvas.toDataURL('image/jpeg', 0.9);
+            fileMimeType = 'image/jpeg';
+
+            elements.snapshotStatus.textContent = "Snapshot ready.";
+            elements.snapshotStatus.classList.remove('hidden');
+            elements.ocrButton.disabled = false;
+            clearResults();
+        };
+
+
+        // --- Handwriting Mode Logic (Mode 2) ---
+
+        window.setupCanvas = (width=450, height=300, lineWidth=4) => {
+            // Adjust size for full text mode
+            elements.handwritingCanvas.width = width; 
+            elements.handwritingCanvas.height = height;
+            
+            ctx.lineWidth = lineWidth; 
+            ctx.lineCap = 'round';
+            ctx.strokeStyle = '#000000';
+            
+            // Setup drawing event listeners
+            setupDrawingListeners();
+            setupCanvasStyles();
+        };
+
+        function setupDrawingListeners() {
+             // Use only one set of listeners to avoid duplicates
+            const canvas = elements.handwritingCanvas;
+            canvas.onmousedown = startDrawing;
+            canvas.onmouseup = stopDrawing;
+            canvas.onmousemove = draw;
+            canvas.onmouseout = stopDrawing;
+
+            canvas.ontouchstart = startDrawing;
+            canvas.ontouchend = stopDrawing;
+            canvas.ontouchmove = draw;
+        }
+
+        function setupCanvasStyles() {
+             // Fill background white
+            ctx.fillStyle = '#FFFFFF';
+            ctx.fillRect(0, 0, elements.handwritingCanvas.width, elements.handwritingCanvas.height);
+            ctx.lineCap = 'round';
+            ctx.strokeStyle = '#000000';
+        }
+
+        function startDrawing(e) {
+            e.preventDefault();
+            isDrawing = true;
+            const { x, y } = getCoordinates(e);
+            ctx.beginPath();
+            ctx.moveTo(x, y);
+            elements.canvasStatus.classList.add('hidden');
+            imageBase64 = null;
+            clearResults();
+        }
+
+        function draw(e) {
+            if (!isDrawing) return;
+            e.preventDefault();
+            const { x, y } = getCoordinates(e);
+            ctx.lineTo(x, y);
+            ctx.stroke();
+        }
+
+        function stopDrawing(e) {
+            e.preventDefault();
+            if (isDrawing) {
+                ctx.closePath();
+                isDrawing = false;
+                captureHandwriting(); // Capture image right after drawing stops
+            }
+        }
+
+        function getCoordinates(e) {
+            const rect = elements.handwritingCanvas.getBoundingClientRect();
+            let clientX, clientY;
+
+            if (e.touches && e.touches.length > 0) {
+                clientX = e.touches[0].clientX;
+                clientY = e.touches[0].clientY;
+            } else {
+                clientX = e.clientX;
+                clientY = e.clientY;
+            }
+
+            // Scale coordinates based on canvas display size vs actual pixel size
+            const scaleX = elements.handwritingCanvas.width / rect.width;
+            const scaleY = elements.handwritingCanvas.height / rect.height;
+
+            return {
+                x: (clientX - rect.left) * scaleX,
+                y: (clientY - rect.top) * scaleY
+            };
+        }
+
+        window.clearCanvas = () => {
+            setupCanvasStyles();
+            elements.canvasStatus.classList.add('hidden');
+            imageBase64 = null;
+            clearResults();
+            elements.ocrButton.disabled = false; // Always enabled in handwriting mode
+        };
+
+        window.captureHandwriting = () => {
+            // Convert canvas content to base64
+            imageBase64 = elements.handwritingCanvas.toDataURL('image/png');
+            fileMimeType = 'image/png';
+            elements.canvasStatus.textContent = "Handwriting captured. Ready for extraction.";
+            elements.canvasStatus.classList.remove('hidden');
+            elements.ocrButton.disabled = false;
+        };
+
+        // --- File Upload Mode Logic (Mode 1) ---
+        
+        // Drag and Drop Handlers
+        ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+            elements.dropArea.addEventListener(eventName, preventDefaults, false);
+        });
+
+        function preventDefaults(e) {
+            e.preventDefault();
+            e.stopPropagation();
+        }
+
+        ['dragenter', 'dragover'].forEach(eventName => {
+            elements.dropArea.addEventListener(eventName, highlight, false);
+        });
+
+        ['dragleave', 'drop'].forEach(eventName => {
+            elements.dropArea.addEventListener(eventName, unhighlight, false);
+        });
+
+        function highlight() { elements.dropArea.classList.add('highlight'); }
+        function unhighlight() { elements.dropArea.classList.remove('highlight'); }
+
+        elements.dropArea.addEventListener('drop', handleDrop, false);
+
+        function handleDrop(e) {
+            let dt = e.dataTransfer;
+            let files = dt.files;
+            if (files.length > 0) {
+                const event = { target: { files: files } };
+                handleFileChange(event);
+            }
+        }
+
+        window.handleFileChange = (event) => {
+            const file = event.target.files[0];
+            if (!file) { clearGlobalState(); return; }
+            if (!file.type.startsWith('image/')) {
+                showError("Please upload a valid image file (JPG or PNG).");
+                clearGlobalState();
+                return;
+            }
+
+            fileMimeType = file.type;
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                imageBase64 = e.target.result;
+                elements.imagePreview.src = imageBase64;
+                elements.imagePreviewContainer.classList.remove('hidden');
+                elements.ocrButton.disabled = false;
+                clearResults();
+            };
+            reader.onerror = () => {
+                showError("Failed to read the file.");
+                clearGlobalState();
+            };
+            reader.readAsDataURL(file);
+        };
+
+        // --- Shared Utility Functions ---
+
+        function clearGlobalState() {
+            imageBase64 = null;
+            fileMimeType = null;
+            elements.fileInput.value = ''; // Clear file input
+            elements.imagePreview.src = '#';
+            elements.imagePreviewContainer.classList.add('hidden');
+            elements.ocrButton.disabled = true;
+            clearResults();
+        }
+
+        function clearResults() {
+            elements.results.textContent = '';
+            elements.resultsPlaceholder.classList.remove('hidden');
+            elements.copyButton.disabled = true;
+            elements.errorDisplay.classList.add('hidden');
+        }
+
+        function showError(message) {
+            elements.errorDisplay.textContent = message;
+            elements.errorDisplay.classList.remove('hidden');
+        }
+
+        // --- Core OCR Execution Logic (MODIFIED for Flask) ---
+
+        window.runOCR = async () => {
+            // Ensure handwriting pad image is captured before running
+            if (currentMode === 'handwriting') {
+                captureHandwriting();
+            }
+
+            if (!imageBase64) {
+                showError("Please provide an image input (draw, upload, or take a snapshot) first.");
+                return;
+            }
+
+            elements.ocrButton.disabled = true;
+            elements.loading.classList.remove('hidden');
+            elements.resultsPlaceholder.classList.add('hidden');
+            elements.results.textContent = ''; // Clear previous text
+            elements.copyButton.disabled = true;
+            elements.errorDisplay.classList.add('hidden');
+
+            // NEW: Prepare the payload for the Flask endpoint
+            const payload = {
+                imageBase64: imageBase64, // Send the full base64 string (data:image/...)
+                fileMimeType: fileMimeType
+            };
+
+            try {
+                // NEW: Call the local Flask endpoint
+                const result = await fetch(API_URL, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+
+                if (!result.ok) {
+                    // Try to parse the error message from the server
+                    const errorData = await result.json().catch(() => ({ error: result.statusText }));
+                    throw new Error(`Server Error (${result.status}): ${errorData.error || result.statusText}`);
+                }
+
+                // The response is the JSON object directly
+                const jsonResponse = await result.json(); 
+                // The backend uses '\\n' in the JSON string for newlines, which needs to be converted for display in <pre>
+                const extractedText = jsonResponse.extractedText || "No text could be extracted.";
+
+                // Replace JSON newline representation with actual newlines for display
+                elements.results.textContent = extractedText.replace(/\\n/g, '\n');
+                elements.copyButton.disabled = (extractedText === "No text could be extracted.");
+
+            } catch (error) {
+                showError(`Extraction Error: ${error.message}. Please check console for details.`);
+                elements.results.textContent = "Extraction failed due to an error.";
+                console.error("Extraction Fetch Error:", error);
+            } finally {
+                elements.loading.classList.add('hidden');
+                // Re-enable OCR button only if a valid input is present (always true for handwriting/camera snapshot)
+                if (imageBase64) {
+                     elements.ocrButton.disabled = false;
+                }
+            }
+        };
+
+
+        // --- Copy Text ---
+
+        window.copyText = () => {
+            const textToCopy = elements.results.textContent;
+            if (textToCopy) {
+                navigator.clipboard.writeText(textToCopy).then(() => {
+                    elements.copyButtonText.textContent = 'Copied!';
+                    setTimeout(() => { elements.copyButtonText.textContent = 'Copy Text'; }, 2000);
+                }).catch(err => {
+                    console.error('Could not copy text: ', err);
+                    // Fallback for older browsers
+                    const el = document.createElement('textarea');
+                    el.value = textToCopy;
+                    el.setAttribute('readonly', '');
+                    el.style.position = 'absolute';
+                    el.style.left = '-9999px';
+                    document.body.appendChild(el);
+                    el.select();
+                    document.execCommand('copy');
+                    document.body.removeChild(el);
+
+                    elements.copyButtonText.textContent = 'Copied!';
+                    setTimeout(() => { elements.copyButtonText.textContent = 'Copy Text'; }, 2000);
+                });
+            }
+        };
+
+        // Initialize to default mode
+        window.onload = () => {
+            switchMode('handwriting');
+        };
+    </script>
+</body>
+</html>
