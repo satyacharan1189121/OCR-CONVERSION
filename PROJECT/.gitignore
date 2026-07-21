@@ -1,0 +1,8 @@
+*.env
+.env
+.env.local
+api.txt
+__pycache__/
+venv/
+PROJECT/api.txt
+PROJECT/venv/

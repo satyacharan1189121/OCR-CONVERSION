@@ -8,25 +8,22 @@ from google.genai import types
 from PIL import Image
 from io import BytesIO
 from base64 import b64decode
+from dotenv import load_dotenv
 
-# ----------------- CONFIGURATION -----------------
-# Check for API Key
-if not os.getenv("GEMINI_API_KEY"):
-    print("FATAL ERROR: GEMINI_API_KEY environment variable is not set.")
-    print("Please set it before running. Example: export GEMINI_API_KEY=\"YOUR_API_KEY\"")
-    exit(1)
-    
+load_dotenv()
+
 app = Flask(__name__)
-# 2. Initialize CORS
-# This allows requests from any origin (*), which is safe for local development.
-CORS(app) 
+CORS(app)
 
-# Initialize the Gemini client
-try:
-    client = genai.Client()
-except Exception as e:
-    print(f"Error initializing Gemini client: {e}")
-    exit(1)
+def get_genai_client():
+    api_key = os.getenv("GEMINI_API_KEY")
+    if not api_key:
+        return None, "GEMINI_API_KEY environment variable is not set on the server."
+    try:
+        # genai.Client() reads GEMINI_API_KEY from environment
+        return genai.Client(), None
+    except Exception as e:
+        return None, f"Error initializing Gemini client: {str(e)}"
 
 
 # ----------------- CORE OCR LOGIC -----------------
@@ -70,6 +67,10 @@ def run_gemini_ocr(base64_image_data: str, mime_type: str) -> dict:
             response_schema=ocr_schema,
         )
 
+        client, client_err = get_genai_client()
+        if client_err:
+            return {"error": client_err}
+
         # Call the Gemini API
         response = client.models.generate_content(
             model='gemini-2.5-flash',
@@ -78,7 +79,14 @@ def run_gemini_ocr(base64_image_data: str, mime_type: str) -> dict:
         )
         
         # Parse the JSON response text provided by the model
-        parsed_model_output = json.loads(response.text)
+        text = response.text
+        # Strip potential markdown codeblock formatting if Gemini returns it
+        if text.startswith('```json'):
+            text = text[7:-3]
+        elif text.startswith('```'):
+            text = text[3:-3]
+
+        parsed_model_output = json.loads(text.strip())
         extracted_text = parsed_model_output.get("extractedText", "No text could be extracted.")
         
         return {"extractedText": extracted_text}
@@ -92,11 +100,12 @@ def run_gemini_ocr(base64_image_data: str, mime_type: str) -> dict:
 
 # ----------------- FLASK ROUTES -----------------
 
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+
 @app.route('/')
 def index():
     """Route to serve the main HTML file."""
-    # The file must be named 'index.html' and reside in the same directory
-    return send_from_directory('.', 'index.html')
+    return send_from_directory(BASE_DIR, 'index.html')
 
 @app.route('/run-ocr', methods=['POST'])
 def run_ocr_endpoint():
@@ -114,7 +123,10 @@ def run_ocr_endpoint():
     # Strip the data URI prefix (e.g., 'data:image/png;base64,')
     try:
         # The split[1] gets the actual base64 data after the comma
-        base64_data = base64_data_with_prefix.split(',', 1)[1]
+        if ',' in base64_data_with_prefix:
+            base64_data = base64_data_with_prefix.split(',', 1)[1]
+        else:
+            base64_data = base64_data_with_prefix
     except IndexError:
         return jsonify({"error": "Invalid base64 format received from client."}), 400
 
