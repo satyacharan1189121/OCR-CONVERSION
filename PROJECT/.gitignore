@@ -1,8 +1,8 @@
-*.env
-.env
-.env.local
-api.txt
+.env*
+!.env.example
+.vercel/
+.vscode/
 __pycache__/
+*.pyc
+api.txt
 venv/
-PROJECT/api.txt
-PROJECT/venv/

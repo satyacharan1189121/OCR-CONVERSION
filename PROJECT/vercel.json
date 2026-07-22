@@ -1,15 +1,15 @@
 {
-  "version": 2,
-  "builds": [
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "redirects": [
     {
-      "src": "api/index.py",
-      "use": "@vercel/python"
+      "source": "/",
+      "destination": "/index.html",
+      "permanent": false
     }
   ],
-  "routes": [
-    {
-      "src": "/(.*)",
-      "dest": "api/index.py"
+  "functions": {
+    "server.py": {
+      "excludeFiles": "{venv/**,.venv/**,__pycache__/**,**/*.pyc,.vscode/**}"
     }
-  ]
+  }
 }
