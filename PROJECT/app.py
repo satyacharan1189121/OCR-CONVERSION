@@ -1,2 +1,1 @@
-from server import app
-
+# Obsolete: Vercel uses api/index.py

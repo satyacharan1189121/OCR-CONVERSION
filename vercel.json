@@ -4,10 +4,6 @@
     {
       "source": "/run-ocr",
       "destination": "/api/index.py"
-    },
-    {
-      "source": "/(.*)",
-      "destination": "/PROJECT/public/index.html"
     }
   ]
 }

@@ -14,7 +14,8 @@ from PIL import Image, UnidentifiedImageError
 
 
 BASE_DIR = Path(__file__).resolve().parent
-PUBLIC_DIR = BASE_DIR / "public"
+PUBLIC_DIR = BASE_DIR.parent / "public"
+
 
 load_dotenv(BASE_DIR / ".env")
 
